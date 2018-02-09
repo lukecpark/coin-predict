@@ -7,10 +7,12 @@ from keras.models import Sequential
 from keras.layers import Dropout
 from keras.layers.core import Dense, Activation
 from keras.layers.recurrent import LSTM
+from keras.optimizers import adam
 import matplotlib.pyplot as plt
 from math import sqrt
 
-np.random.seed(7)
+SEED = 7 # random seed
+np.random.seed(SEED)
 
 # main
 if __name__ == "__main__":
@@ -51,16 +53,15 @@ if __name__ == "__main__":
     N_val = int((len(Y) - N_test) * 0.1)
     # X_train, X_val, X_test = np.array(X[:N_train]), np.array(X[N_train:N_train+N_val]), np.array(X[N_train+N_val:])
     # Y_train, Y_val, Y_test = np.array(Y[:N_train]), np.array(Y[N_train:N_train+N_val]), np.array(Y[N_train+N_val:])
-    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=N_test, random_state=7)
-    X_train, X_val, Y_train, Y_val = train_test_split(X_train, Y_train, test_size=N_val, random_state=7)
+    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=N_test, random_state=SEED)
+    X_train, X_val, Y_train, Y_val = train_test_split(X_train, Y_train, test_size=N_val, random_state=SEED)
 
     """
     모델 설정
     """
     n_in = len(X[0][0])
     n_out = len(Y[0])
-    n_hidden = [5, 10, 10, 10, 10]
-    d_layer = 5
+    n_hidden = [20, 20, 20, 20, 20]
 
     early_stopping = EarlyStopping(monitor='val_loss', patience=10, verbose=1)
 
@@ -69,41 +70,36 @@ if __name__ == "__main__":
     """
     model = Sequential()
 
-    # tanh
     model.add(LSTM(
         n_hidden[0],
         input_shape=(window, n_in),
+        # activation='softsign',
+        # kernel_initializer='glorot_normal', # Xavier
         return_sequences=True))
-    model.add(Dropout(0.2))
+    model.add(Dropout(0.3))
 
     for i in range(len(n_hidden) - 2):
         model.add(LSTM(
             n_hidden[i + 1],
+            # activation='softsign',
+            # kernel_initializer='glorot_normal',  # Xavier
             return_sequences=True))
-        model.add(Dropout(0.2))
+        model.add(Dropout(0.3))
 
     model.add(LSTM(
         n_hidden[len(n_hidden) - 1],
+        # activation='softsign',
+        # kernel_initializer='glorot_normal',  # Xavier
         return_sequences=False))
 
     model.add(Dense(
-        n_out))
-    model.add(Activation('linear'))
+        n_out,
+        activation='linear'))
 
     model.summary()
 
-    model.compile(loss='mean_squared_error', optimizer='adam')
-
-    """
-    학습 전 출력
-    """
-    output = scaler.inverse_transform(model.predict(X))
-    target = scaler.inverse_transform(Y)
-    plt.plot(output[::, 3], 'b--', label='output')
-    plt.plot(target[::, 3], 'r-', label='target')
-    plt.legend()
-    plt.title('Before Training - close')
-    plt.show()
+    optimizer = adam(lr=0.005)
+    model.compile(loss='mean_squared_error', optimizer=optimizer)
 
     """
     모델 학습
@@ -115,9 +111,8 @@ if __name__ == "__main__":
                         verbose=2)
 
     """
-    학습 결과
+    Loss
     """
-    # loss
     plt.plot(history.history['loss'])
     plt.title('Loss')
     plt.show()
