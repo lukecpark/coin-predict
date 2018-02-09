@@ -24,7 +24,7 @@ ref. https://steemit.com/kr/@axiomier/poloniex-hts-1-api
 from urllib.request import urlopen
 from time import time
 import json
-import pprint
+from pprint import pprint
 from time import sleep
 import os
 
@@ -46,8 +46,9 @@ log.close()
 """
 API 호출
 """
-u = urlopen("https://poloniex.com/public?command=returnChartData&currencyPair=USDT_BTC&start=0000000000&end=9999999999&period=300")
-sleep(300) # 데이터 로딩시간
+# candlestick period in seconds; valid values are 300, 900, 1800, 7200, 14400, and 86400
+u = urlopen("https://poloniex.com/public?command=returnChartData&currencyPair=USDT_BTC&start=0000000000&end=9999999999&period=86400")
+sleep(30) # 데이터 로딩시간
 
 data = u.read()
 j = (json.loads(data))
@@ -58,4 +59,4 @@ j = (json.loads(data))
 for item in j:
     with open(OUT_PATH + str(item['date']) + '.json', 'w') as output:
         json.dump(item, output)
-        #pprint()
+        #pprint.pprint()
