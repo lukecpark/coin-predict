@@ -1,164 +1,146 @@
 import numpy as np
-import matplotlib.pyplot as plt
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error
+from keras.callbacks import EarlyStopping
 from keras.models import Sequential
+from keras.layers import Dropout
 from keras.layers.core import Dense, Activation
 from keras.layers.recurrent import LSTM
-from keras.optimizers import Adam
-from keras.callbacks import EarlyStopping
-from keras.models import load_model
-from sklearn.model_selection import train_test_split
-from sklearn.utils import shuffle
-from pprint import pprint
-import json
-import os
+import matplotlib.pyplot as plt
+from math import sqrt
 
-np.random.seed(0)
+np.random.seed(7)
 
+# main
+if __name__ == "__main__":
+    """
+    데이터 읽기
+    """
+    PATH = './result/'
+    # open, high, low, close, volume
+    raw = np.loadtxt(PATH + 'output.csv', delimiter=',', skiprows=1, usecols=[1, 2, 3, 4, 5])
 
-"""
-JSON 파일 추출
-"""
-files = []
-IN_PATH = './result/'
-for filename in os.listdir(IN_PATH):
-    if filename.endswith(".json"):
-        files.append(filename)
+    """
+    데이터 정규화
+    """
+    scaler = MinMaxScaler(feature_range=(0, 1))
+    nptf = scaler.fit_transform(raw)
 
-"""
-데이터 읽기
-"""
-f = []
-start_date = 0
-end_date = 0
+    """
+    데이터 생성
+    """
+    seq_len = len(raw) # 전체 시계열 길이
+    window = 7 # 하나의 시계열 길이
+    dim = 5 # 데이터 차원
 
-cnt = 0
-for file in files:
-    if cnt == 0:
-        start_date = int(file.split('.')[0])
+    X = []
+    Y = []
+    for i in range(seq_len - window):
+        x_ = nptf[i: i + window]
+        y_ = nptf[i + window]
+        X.append(x_)
+        Y.append(y_)
+        # print(x_, '->', y_)
 
-    print(cnt, 'read:', file)
+    X = np.array(X)
+    Y = np.array(Y)
 
-    dim = []
-    with open(IN_PATH + file) as data_:
-        dict = json.load(data_)
-        dim.append(dict['volume'])
-        dim.append(dict['weightedAverage'])
+    # split to train and testing
+    N_test = int(len(Y) * 0.2)
+    N_val = int((len(Y) - N_test) * 0.1)
+    # X_train, X_val, X_test = np.array(X[:N_train]), np.array(X[N_train:N_train+N_val]), np.array(X[N_train+N_val:])
+    # Y_train, Y_val, Y_test = np.array(Y[:N_train]), np.array(Y[N_train:N_train+N_val]), np.array(Y[N_train+N_val:])
+    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=N_test, random_state=7)
+    X_train, X_val, Y_train, Y_val = train_test_split(X_train, Y_train, test_size=N_val, random_state=7)
 
-    f.append(dim)
-
-    end_date = int(file.split('.')[0])
-    cnt += 1
-
-
-    if cnt == 10000: ##
-        break ##
-
-"""
-데이터 생성
-"""
-len_sequences = cnt # 전체 시계열 길이
-window = 288 # 하나의 시계열 데이터 길이
-
-data = []
-target = [] # 정답레이블
-
-for i in range(len_sequences - window):
-    data.append(f[i: i+window])
-    target.append(f[i+window])
-
-X = np.array(data).reshape(len(data), window, 2)
-Y = np.array(target).reshape(len(target), 2)
-
-N_train = int(len(data) * 0.9)
-N_vali = len(data) - N_train
-
-X_train, X_vali, Y_train, Y_vali = train_test_split(X, Y, test_size=N_vali)
-
-"""
-모델 공통 설정
-"""
-n_in = len(X[0][0]) # 2
-n_hidden = 30
-n_out = len(Y[0]) # 2
-
-early_stopping = EarlyStopping(monitor='val_loss', patience=10, verbose=1)
-
-"""
-모델 불러오기
-"""
-h5_s = []
-IN_PATH = './model/'
-if not os.path.exists(IN_PATH):
-    os.makedirs(IN_PATH)
-
-for filename in os.listdir(IN_PATH):
-    h5_s.append(filename)
-
-h5_cnt = len(h5_s)
-
-if  h5_cnt != 0:
-    model = load_model(IN_PATH + h5_s[-1])
-    print('import: ', h5_s[-1])
-
-else:
     """
     모델 설정
     """
+    n_in = len(X[0][0])
+    n_out = len(Y[0])
+    n_hidden = [5, 10, 10, 10, 10]
+    d_layer = 5
+
+    early_stopping = EarlyStopping(monitor='val_loss', patience=10, verbose=1)
+
+    """
+    모델 구축
+    """
     model = Sequential()
-    model.add(LSTM(n_hidden,
-                   kernel_initializer='random_uniform',
-                   input_shape=(window, n_in)))
-    model.add(Dense(n_out, kernel_initializer='random_uniform'))
+
+    # tanh
+    model.add(LSTM(
+        n_hidden[0],
+        input_shape=(window, n_in),
+        return_sequences=True))
+    model.add(Dropout(0.2))
+
+    for i in range(len(n_hidden) - 2):
+        model.add(LSTM(
+            n_hidden[i + 1],
+            return_sequences=True))
+        model.add(Dropout(0.2))
+
+    model.add(LSTM(
+        n_hidden[len(n_hidden) - 1],
+        return_sequences=False))
+
+    model.add(Dense(
+        n_out))
     model.add(Activation('linear'))
 
-    optimizer = Adam(lr=0.001, beta_1=0.9, beta_2=0.999)
-    model.compile(loss='mean_squared_error',
-                  optimizer=optimizer)
+    model.summary()
 
-"""
-모델 학습
-"""
-epochs = 100
-batch_size = 50
+    model.compile(loss='mean_squared_error', optimizer='adam')
 
-model.fit(X_train, Y_train,
-          batch_size=batch_size,
-          epochs=epochs,
-          validation_data=(X_vali, Y_vali),
-          callbacks=[early_stopping])
+    """
+    학습 전 출력
+    """
+    output = scaler.inverse_transform(model.predict(X))
+    target = scaler.inverse_transform(Y)
+    plt.plot(output[::, 3], 'b--', label='output')
+    plt.plot(target[::, 3], 'r-', label='target')
+    plt.legend()
+    plt.title('Before Training - close')
+    plt.show()
 
-"""
-모델 저장
-"""
-h5_cnt += 1
-OUT_PATH = './model/'
-model.save(OUT_PATH + str(h5_cnt) + '.h5')
-print('create: ', str(h5_cnt) + '.h5')
+    """
+    모델 학습
+    """
+    history = model.fit(X_train, Y_train,
+                        validation_data=(X_val, Y_val),
+                        epochs=200,
+                        callbacks=[early_stopping],
+                        verbose=2)
 
-"""
-output to use
-"""
-original = [f[i][1] for i in range(window)]
-predicted = [None for i in range(window)]
+    """
+    학습 결과
+    """
+    # loss
+    plt.plot(history.history['loss'])
+    plt.title('Loss')
+    plt.show()
 
-Z = X[:1] # 가장 앞
-for i in range(len_sequences - window + 1):
-    z_ = Z[-1:] # 가장 뒤
-    y_ = model.predict(z_)
-    sequence_ = np.concatenate(
-        (z_.reshape(window, n_in)[1:], y_),
-        axis=0).reshape(1, window, n_in)
-    Z = np.append(Z, sequence_, axis=0)
+    """
+    학습 후 출력
+    """
+    output = scaler.inverse_transform(model.predict(X))
+    target = scaler.inverse_transform(Y)
+    plt.plot(output[::, 3], 'b--', label='output')
+    plt.plot(target[::, 3], 'r-', label='target')
+    plt.legend()
+    plt.title('After Training - close')
+    plt.show()
 
-    print(i, 'pred:', y_)
-    predicted.append((y_.reshape(-1))[1])
+    """
+    모델 평가
+    """
+    output = scaler.inverse_transform(model.predict(X_test))
+    target = scaler.inverse_transform(Y_test)
+    score = sqrt(mean_squared_error(target[::, 3], output[::, 3]))
+    print('Train Score: %.2f RMSE' % score)
 
-"""
-visualization
-"""
-plt.rc('font', family='serif')
-plt.figure()
-plt.plot([f[i][1] for i in range(len_sequences)], linestyle='dotted', color='#aaaaaa') # 원래 그래프
-plt.plot(original, linestyle='dashed', color='black') # 예측에 사용한 초기값 (window)
-plt.plot(predicted, color='black') # 예측값
-plt.show()
+    """
+    다음 일주일 예측
+    """
