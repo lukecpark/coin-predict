@@ -5,7 +5,7 @@ from sklearn.metrics import mean_squared_error
 from keras.callbacks import EarlyStopping
 from keras.models import Sequential
 from keras.layers import Dropout
-from keras.layers.core import Dense, Activation
+from keras.layers.core import Dense
 from keras.layers.recurrent import LSTM
 from keras.optimizers import adam
 import matplotlib.pyplot as plt
@@ -73,23 +73,20 @@ if __name__ == "__main__":
     model.add(LSTM(
         n_hidden[0],
         input_shape=(window, n_in),
-        # activation='softsign',
-        # kernel_initializer='glorot_normal', # Xavier
+        activation='softsign',
         return_sequences=True))
     model.add(Dropout(0.3))
 
     for i in range(len(n_hidden) - 2):
         model.add(LSTM(
             n_hidden[i + 1],
-            # activation='softsign',
-            # kernel_initializer='glorot_normal',  # Xavier
+            activation='softsign',
             return_sequences=True))
         model.add(Dropout(0.3))
 
     model.add(LSTM(
         n_hidden[len(n_hidden) - 1],
-        # activation='softsign',
-        # kernel_initializer='glorot_normal',  # Xavier
+        activation='softsign',
         return_sequences=False))
 
     model.add(Dense(
