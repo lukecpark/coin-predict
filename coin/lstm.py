@@ -1,3 +1,4 @@
+import os
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
@@ -115,24 +116,49 @@ if __name__ == "__main__":
     plt.show()
 
     """
+    모델 평가
+    """
+    output_ = scaler.inverse_transform(model.predict(X_test))
+    target_ = scaler.inverse_transform(Y_test)
+    score = sqrt(mean_squared_error(target_[::, 3], output_[::, 3]))
+    print('Train Score: %.2f RMSE' % score)
+
+    """
+    모델 저장
+    """
+    OUT_PATH = './model/'
+    if not os.path.exists(OUT_PATH):
+        os.makedirs(OUT_PATH)
+
+    model.save(OUT_PATH + 'lstm.h5')
+    print('Create: lstm.h5')
+
+    """
     학습 후 출력
     """
     output = scaler.inverse_transform(model.predict(X))
     target = scaler.inverse_transform(Y)
     plt.plot(output[::, 3], 'b--', label='output')
     plt.plot(target[::, 3], 'r-', label='target')
+
+    """
+    향후 예측
+    """
+    future = 30
+    predict = [None for i in range(len(Y) - 1)]
+
+    z_ = X[-1:]  # 가장 뒤
+    for i in range(future):
+        y_ = model.predict(z_)
+
+        z_ = np.append(z_[0], y_, axis=0)
+        z_ = z_[np.newaxis, 1:]
+
+        y_ = scaler.inverse_transform(y_)
+        predict.append((y_.reshape(-1))[3])
+
+    # graph
+    plt.plot(predict, 'g--', label='predict')
     plt.legend()
     plt.title('After Training - close')
     plt.show()
-
-    """
-    모델 평가
-    """
-    output = scaler.inverse_transform(model.predict(X_test))
-    target = scaler.inverse_transform(Y_test)
-    score = sqrt(mean_squared_error(target[::, 3], output[::, 3]))
-    print('Train Score: %.2f RMSE' % score)
-
-    """
-    다음 일주일 예측
-    """
